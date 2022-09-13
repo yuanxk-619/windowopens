@@ -73,7 +73,7 @@ print(D)
 D = torch.nn.DataParallel(D).cuda()
 G = torch.nn.DataParallel(G).cuda()
 cudnn.benchmark = True
-D.load_state_dict(torch.load(r'./pth/parasbest1true.pth'))
+D.load_state_dict(torch.load(r'./pth/parasbest1parastrue.pth'))
 T = gd_model.Train(G, D, None, None)
 test_acc_top1 = 0.0
 test_acc_top2 = 0.0
@@ -86,7 +86,7 @@ with tqdm(total=len(test_dataloader)) as pbar:
         test_acc_top1 += top1acc
         test_acc_top2 += top2acc
         test_acc_top3 += top3acc
-        test_paras_loss += parasloss
+        test_paras_loss += parasloss / test_batch_size
         pbar.set_postfix(**{'top1': top1acc, 'top2': top2acc, 'top3': top3acc, 'paras_loss': parasloss})
         pbar.update()
 test_acc_top1 /= len(test_dataloader)
