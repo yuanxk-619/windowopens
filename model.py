@@ -151,7 +151,7 @@ class Train(object):
             acc1 = torch.mean((max1 == y).float())
             acc2 = acc1 + torch.mean((max2 == y).float())
             acc3 = acc2 + torch.mean((max3 == y).float())
-            loss_paras_test = F.l1_loss(paras, out_paras, reduction="mean")
+            loss_paras_test = F.l1_loss(paras, out_paras, reduction="none").sum()
         return acc1.item(), acc2.item(), acc3.item(), loss_paras_test.item()
 
 
