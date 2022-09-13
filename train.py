@@ -194,7 +194,7 @@ for epoch in range(epochs):
         loss_gen = T.train_batch_gen(unlabel2)
         G.eval()
         if train_batch_time % 5 == 0:
-            torchvision.utils.save_image(G(noise22), str('E:/project/liang/new/pic/' + str(train_batch_time) + '.png'),
+            torchvision.utils.save_image(G(noise22), str('./pic/' + str(train_batch_time) + '.png'),
                                          nrow=10, padding=2, normalize=True, range=(-1, 1), scale_each=False,
                                          pad_value=0)
         if loss_gen > 1 and epoch > 1:
