@@ -1,0 +1,16 @@
+task: 0
+path:
+  label_train_path: ../data/labeled_data/train
+  label_test_path: ../data/labeled_data/test
+  label_xml_path: ../data/labeled_data/xml
+  unlabel_path: ../data/uldata
+para:
+  epoch: 200
+  batch_size: 100
+  lr: 0.003
+  seed: 1
+  num_works: 4
+  device: 0
+  num_classes: 9
+  lr_factor: 0.5
+  lr_step: 300
