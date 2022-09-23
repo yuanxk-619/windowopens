@@ -41,7 +41,7 @@ class _G(nn.Module):
 class _D(nn.Module):
     def __init__(self, num_classes):
         super(_D, self).__init__()
-        resnet = models.resnet34(pretrained=True)
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         layers = list(resnet.children())[:8]
         self.features1 = nn.Sequential(*layers[:6])
         self.features2 = nn.Sequential(*layers[6:])

@@ -63,7 +63,7 @@ label_train_path = r"./data/labeled_data/train"
 label_test_path = r"./data/labeled_data/test"
 label_xml_path = r"./data/labeled_data/xml"
 unlabel_path = r"./data/uldata"
-epochs = 100
+epochs = 200
 train_batch_size = 100
 test_batch_size = 100
 my_lr = 0.003
@@ -128,7 +128,7 @@ for epoch in range(epochs):
     for unlabel1, _label1 in unl_data_loader:
         unlabel2, _label2 = next(unl_data_loader2_iter)
         try:
-            x, y, paras = next(la_train_data_loader_iter)
+            x, y, paras   = next(la_train_data_loader_iter)
         except StopIteration:
             # test
             test_acc_top1 = 0.0
@@ -187,6 +187,7 @@ for epoch in range(epochs):
         train_batch_time += 1
 
         total_lab += loss_lab
+
         total_unlab += loss_unlab
         total_train_acc += train_acc
         single_label_acc += train_acc

@@ -70,10 +70,11 @@ test_dataloader = DataLoader(test_dataset, test_batch_size, shuffle=True, drop_l
 G = gd_model._G()
 D = gd_model._D(9)
 print(D)
+D.load_state_dict(torch.load(r'script/pth/semi_acc_top1.pth'))
 D = torch.nn.DataParallel(D).cuda()
 G = torch.nn.DataParallel(G).cuda()
 cudnn.benchmark = True
-D.load_state_dict(torch.load(r'./pth/parasbest1parastrue.pth'))
+# D.load_state_dict(torch.load(r'./pth/parasbest1true.pth'))
 T = gd_model.Train(G, D, None, None)
 test_acc_top1 = 0.0
 test_acc_top2 = 0.0
