@@ -184,114 +184,6 @@ def train_semi(yaml: dict):
     return test_net(yaml, 1)
 
 
-def train_full(yaml: dict):
-    label_path = yaml['path']['label_train_path']
-    label_xml_path = yaml['path']['label_xml_path']
-    label_test_path = yaml['path']['label_test_path']
-    batch_size = yaml['para']['batch_size']
-    lr = yaml['para']['lr']
-    if torch.cuda.is_available():
-        cudnn.benchmark = True
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([
-        transforms.Resize([64, 64]),
-        transforms.ToTensor(),
-        normalize])
-    logging.info(f'start loading data...')
-    la_dataset = OurDataset(label_path, label_xml_path, transform)
-    test_dataset = OurDataset(label_test_path, label_xml_path, transform)
-    test_dataloader = DataLoader(test_dataset, batch_size, shuffle=True, drop_last=True, num_workers=yaml['para']['num_works'])
-    la_dataloader = DataLoader(la_dataset, batch_size, shuffle=True, drop_last=True, num_workers=yaml['para']['num_works'])
-    D = gd_model._D(yaml['para']['num_classes'])
-    G = gd_model._G()
-    if torch.cuda.is_available():
-        D = torch.nn.DataParallel(D).cuda()
-        G = torch.nn.DataParallel(G).cuda()
-    optimizer_D = optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
-    optimizer_G = optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
-    logging.info(f'Start full-supervised training...')
-    best_acc1, best_acc2, best_acc3, best_para = 0.0, 0.0, 0.0, 100000.0
-    D.train()
-    G.train()
-    for epoch in range(yaml['para']['epoch']):
-        total_train_acc = 0.0
-        for x, y, para in la_dataloader:
-            noise = torch.randn(y.shape[0], 100, 1, 1)
-            if torch.cuda.is_available():
-                x, y, para, noise = x.cuda(), y.cuda(), para.cuda(), noise.cuda()
-            optimizer_D.zero_grad()
-            optimizer_G.zero_grad()
-            pc, pp = D(x)
-            gen = G(noise)
-            gen_out = D(gen, feature=True)
-            m1 = torch.mean(pc, dim=0)
-            m2 = torch.mean(gen_out, dim=0)
-            loss_gen = torch.mean(torch.abs(m1 - m2))
-            loss = torch.mean(torch.mean(log_sum_exp(pc))) - torch.mean(torch.gather(pc, 1, y.unsqueeze(1)))
-            loss_para = F.l1_loss(pp, para, reduction="none").sum(1)
-            loss_para = loss_para.sum()
-            total_loss = loss + loss_para * 0.00001 + loss_gen
-            train_acc = torch.mean((pc.max(1)[1] == y).float())
-            total_loss.backward()
-            optimizer_G.step()
-            optimizer_D.step()
-            total_train_acc += train_acc
-        # test
-        total_train_acc /= len(la_dataloader)
-        test_acc_top1, test_acc_top2, test_acc_top3, test_paras_loss = 0, 0, 0, 0
-        with torch.no_grad():
-            for test_x, test_y, test_para in test_dataloader:
-                if torch.cuda.is_available():
-                    test_x, test_y, test_para = test_x.cuda(), test_y.cuda(), test_para.cuda()
-                test_pc, test_pp = D(test_x)
-                best2 = test_pc.topk(3)[1]
-                first = torch.tensor(0).cuda()
-                second = torch.tensor(1).cuda()
-                third = torch.tensor(2).cuda()
-                max1 = best2.index_select(1, first).float()
-                max2 = best2.index_select(1, second).float()
-                max3 = best2.index_select(1, third).float()
-                max1 = max1.reshape(max1.shape[0])
-                max2 = max2.reshape(max2.shape[0])
-                max3 = max3.reshape(max3.shape[0])
-                acc1 = torch.mean((max1 == test_y).float())
-                acc2 = acc1 + torch.mean((max2 == test_y).float())
-                acc3 = acc2 + torch.mean((max3 == test_y).float())
-                loss_paras_test = F.l1_loss(test_para, test_pp, reduction="none").sum() / batch_size
-                test_acc_top1 += acc1
-                test_acc_top2 += acc2
-                test_acc_top3 += acc3
-                test_paras_loss += loss_paras_test
-            test_acc_top1 /= len(test_dataloader)
-            test_acc_top2 /= len(test_dataloader)
-            test_acc_top3 /= len(test_dataloader)
-            test_paras_loss /= len(test_dataloader)
-            if test_acc_top1 > best_acc1:
-                best_acc1 = test_acc_top1
-                torch.save(D.state_dict(), r'./pth/full_acc_top1.pth')
-            if test_acc_top2 > best_acc2:
-                best_acc2 = test_acc_top2
-                torch.save(D.state_dict(), r'./pth/full_acc_top2.pth')
-            if test_acc_top3 > best_acc3:
-                best_acc3 = test_acc_top3
-                torch.save(D.state_dict(), r'./pth/full_acc_top3.pth')
-            if test_paras_loss < best_para:
-                best_para = test_paras_loss
-                torch.save(D.state_dict(), r'./pth/full_paratrue1.pth')
-            logging.info(
-                f'Epoch:{epoch + 1}: train_acc:%.4f test_acc_top1:%.4f test_acc_top2:%.4f test_acc_top3:%.4f test_para_loss:%.2f best_top1:%.4f best_top2:%.4f best_top3:%.4f best_para:%.2f' % (
-                    total_train_acc, test_acc_top1, test_acc_top2, test_acc_top3, test_paras_loss, best_acc1, best_acc2, best_acc3,
-                    best_para))
-        if (epoch + 1) % yaml['para']['lr_step'] == 0:
-            lr = lr * yaml['para']['lr_factor']
-            for param_group in optimizer_D.param_groups:
-                param_group['lr'] = lr
-            logging.info(f"my_lr changes to {lr}")
-    logging.info(f'Done!\nTesting full-supervised model performance...')
-    return test_net(yaml, 0)
-
-
 # Semi-supervised training classification-finetuning
 def train_cls_finetine(yaml: dict):
     label_path = yaml['path']['label_train_path']
@@ -467,15 +359,11 @@ if __name__ == '__main__':
     seed = yaml_para['para']['seed']
     np.random.seed(seed)
     torch.manual_seed(seed)
-    # It proves that the training accuracy of this supervision is higher than that of full supervision
+    # It proves that the training accuracy of semi-supervision
     if yaml_para['task'] == 0:
         logging.info('Validate the performance of semi-supervised and fully-supervised training')
         semi_acc1, semi_acc2, semi_acc3, semi_para = train_semi(yaml_para)
         logging.info(f'semi_acc1:{semi_acc1} semi_acc2:{semi_acc2} semi_acc3:{semi_acc3} semi_para:{semi_para}\n\n')
-        full_acc1, full_acc2, full_acc3, full_para = train_full(yaml_para)
-        logging.info(f'full_acc1:{full_acc1} full_acc2:{full_acc2} full_acc3:{full_acc3} full_para:{full_para}\n\n')
-        logging.info(f'semi_acc1:{semi_acc1} semi_acc2:{semi_acc2} semi_acc3:{semi_acc3} semi_para:{semi_para}')
-        logging.info(f'full_acc1:{full_acc1} full_acc2:{full_acc2} full_acc3:{full_acc3} full_para:{full_para}')
     elif yaml_para['task'] == 1:
         logging.info('Fine-tune the model classification head')
         multi_task_cls_acc1, multi_task_cls_acc2, multi_task_cls_acc3, _ = test_net(yaml_para, 1)
